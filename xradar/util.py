@@ -142,7 +142,7 @@ def _reindex_angle(ds, array, tolerance, method="nearest"):
 
 
 def reindex_angle(
-    ds, start_angle, stop_angle, angle_res, direction, method="nearest", tolerance=None
+    ds, start_angle=None, stop_angle=None, angle_res=None, direction=None, method="nearest", tolerance=None
 ):
     """Reindex along first angle.
 
@@ -152,6 +152,9 @@ def reindex_angle(
     ----------
     ds : xarray.Dataset
         Dateset to reindex first angle.
+
+    Keyword Arguments
+    -----------------
     start_angle : float
         Start angle of dataset.
     stop_angle : float
@@ -160,9 +163,6 @@ def reindex_angle(
         Angle resolution of the dataset.
     direction : int
         Sweep direction, -1 -> CCW, 1 -> CW.
-
-    Keyword Arguments
-    -----------------
     method : str
         Reindexing method, defaults to "nearest". See xarray.Dataset.reindex().
     tolerance : float
@@ -173,7 +173,6 @@ def reindex_angle(
     -------
     ds : xarray.Dataset
         Reindexed dataset
-
     """
     if tolerance is None:
         tolerance = angle_res / 2.0

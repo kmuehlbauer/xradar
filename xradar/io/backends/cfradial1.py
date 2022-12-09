@@ -50,6 +50,7 @@ from ...model import (
     required_root_vars,
 )
 from .common import _attach_sweep_groups, _maybe_decode
+from ... import util
 
 
 def _get_required_root_dataset(ds, optional=True):
@@ -393,6 +394,7 @@ class CfRadial1BackendEntrypoint(BackendEntrypoint):
         format=None,
         group="/",
         first_dim="auto",
+        reindex_angle=False,
         optional=True,
         site_coords=True,
     ):
@@ -425,5 +427,9 @@ class CfRadial1BackendEntrypoint(BackendEntrypoint):
         )
         if ds is None:
             raise ValueError(f"Group `{group}` missing from file `{filename_or_obj}`.")
+
+        if decode_coords and reindex_angle is not False:
+            ds = ds.pipe(util.remove_duplicate_rays)
+            ds = ds.pipe(util.reindex_angle, **reindex_angle)
 
         return ds

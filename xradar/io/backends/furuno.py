@@ -80,6 +80,8 @@ from .common import (
     _unpack_dictionary,
 )
 
+from ... import util
+
 
 def decode_time(data, time_struct=None):
     """Decode `YMDS_TIME` into datetime object."""
@@ -735,7 +737,9 @@ class FurunoBackendEntrypoint(BackendEntrypoint):
         ds.encoding["engine"] = "furuno"
 
         if decode_coords and reindex_angle is not False:
-            ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
+            ds = ds.pipe(util.remove_duplicate_rays)
+            ds = ds.pipe(util.reindex_angle, **reindex_angle)
+            # ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
 
         # handling first dimension
         dim0 = "elevation" if ds.sweep_mode.load() == "rhi" else "azimuth"

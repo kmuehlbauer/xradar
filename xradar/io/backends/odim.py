@@ -64,7 +64,7 @@ from ...model import (
     moment_attrs,
     sweep_vars_mapping,
 )
-from ...util import has_import
+from ... import util
 from .common import (
     _assign_root,
     _attach_sweep_groups,
@@ -607,7 +607,7 @@ class OdimStore(AbstractDataStore):
             kwargs["decode_vlen_strings"] = decode_vlen_strings
 
         if lock is None:
-            if has_import("dask"):
+            if util.has_import("dask"):
                 lock = HDF5_LOCK
             else:
                 lock = False
@@ -742,7 +742,9 @@ class OdimBackendEntrypoint(BackendEntrypoint):
         ds.encoding["engine"] = "odim"
 
         if decode_coords and reindex_angle is not False:
-            ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
+            ds = ds.pipe(util.remove_duplicate_rays)
+            ds = ds.pipe(util.reindex_angle, **reindex_angle)
+            # ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
 
         if not keep_azimuth:
             if ds.azimuth.dims[0] == "elevation":

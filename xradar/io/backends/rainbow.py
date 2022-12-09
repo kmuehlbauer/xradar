@@ -60,6 +60,7 @@ from ...model import (
 )
 from .common import _attach_sweep_groups, _reindex_angle
 from .odim import _assign_root
+from ... import util
 
 #: mapping of rainbow moment names to CfRadial2/ODIM names
 rainbow_mapping = {
@@ -827,7 +828,9 @@ class RainbowBackendEntrypoint(BackendEntrypoint):
         )
 
         if decode_coords and reindex_angle is not False:
-            ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
+            ds = ds.pipe(util.remove_duplicate_rays)
+            ds = ds.pipe(util.reindex_angle, **reindex_angle)
+            # ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
 
         # handling first dimension
         dim0 = "elevation" if ds.sweep_mode.load() == "rhi" else "azimuth"

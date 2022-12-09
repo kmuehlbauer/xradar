@@ -62,6 +62,7 @@ from ...model import (
     sweep_vars_mapping,
 )
 from .common import _assign_root, _attach_sweep_groups, _reindex_angle
+from ... import util
 
 #: mapping from IRIS names to CfRadial2/ODIM
 iris_mapping = {
@@ -3953,7 +3954,9 @@ class IrisBackendEntrypoint(BackendEntrypoint):
 
         # todo: re-think the whole idea of angle reindexing and align with the other readers
         if decode_coords and reindex_angle is not False:
-            ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
+            ds = ds.pipe(util.remove_duplicate_rays)
+            ds = ds.pipe(util.reindex_angle, **reindex_angle)
+            #ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
 
         ds.attrs.pop("elevation_lower_limit", None)
         ds.attrs.pop("elevation_upper_limit", None)

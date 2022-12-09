@@ -64,7 +64,7 @@ from ...model import (
     moment_attrs,
     sweep_vars_mapping,
 )
-from ...util import has_import
+from ... import util
 from .common import (
     _assign_root,
     _attach_sweep_groups,
@@ -359,7 +359,7 @@ class GamicStore(AbstractDataStore):
             kwargs["decode_vlen_strings"] = decode_vlen_strings
 
         if lock is None:
-            if has_import("dask"):
+            if util.has_import("dask"):
                 lock = HDF5_LOCK
             else:
                 lock = False
@@ -437,9 +437,8 @@ class GamicBackendEntrypoint(BackendEntrypoint):
         invalid_netcdf=None,
         phony_dims="access",
         decode_vlen_strings=True,
-        keep_elevation=True,
-        keep_azimuth=True,
         reindex_angle=False,
+        fix_second_angle=False,
         first_dim="auto",
         site_coords=True,
     ):
@@ -472,14 +471,8 @@ class GamicBackendEntrypoint(BackendEntrypoint):
         ds.encoding["engine"] = "gamic"
 
         if decode_coords and reindex_angle is not False:
-            ds = ds.pipe(_reindex_angle, store=store, tol=reindex_angle)
-
-        if not keep_azimuth:
-            if ds.azimuth.dims[0] == "elevation":
-                ds = ds.assign_coords({"azimuth": ds.azimuth.pipe(_fix_angle)})
-        if not keep_elevation:
-            if ds.elevation.dims[0] == "azimuth":
-                ds = ds.assign_coords({"elevation": ds.elevation.pipe(_fix_angle)})
+            ds = ds.pipe(util.remove_duplicate_rays)
+            ds = ds.pipe(util.reindex_angle, **reindex_angle)
 
         # handling first dimension
         dim0 = "elevation" if ds.sweep_mode.load() == "rhi" else "azimuth"
@@ -492,6 +485,10 @@ class GamicBackendEntrypoint(BackendEntrypoint):
             if "time" not in ds.dims:
                 ds = ds.swap_dims({dim0: "time"})
             ds = ds.sortby("time")
+
+        if fix_second_angle and first_dim == "auto":
+            dim1 = {"azimuth": "elevation", "elevation": "azimuth"}[dim0]
+            ds = ds.assign_coords({dim1: ds[dim1].pipe(_fix_angle)})
 
         # reassign azimuth/elevation/time coordinates
         ds = ds.assign_coords({"azimuth": ds.azimuth})
@@ -529,16 +526,11 @@ def open_gamic_datatree(filename_or_obj, **kwargs):
         Can be ``time`` or ``auto`` first dimension. If set to ``auto``,
         first dimension will be either ``azimuth`` or ``elevation`` depending on
         type of sweep. Defaults to ``auto``.
-    keep_elevation : bool
-        For PPI only. Keep original elevation data if True. If False,
-        fixes erroneous elevation data. Defaults to True.
-    keep_azimuth : bool
-        For RHI only. Keep original azimuth data if True. If False,
-        fixes erroneous azimuth data. Defaults to True.
-    reindex_angle : bool or float
-        Defaults to False, no reindexing. If True reindex angle with tol=0.4deg. If
-        given a floating point number, it is used as tolerance.
-        Only invoked if `decode_coord=True`.
+    reindex_angle : bool or dict
+        Defaults to False, no reindexing. Given dict should contain the kwargs to
+        reindex_angle. Only invoked if `decode_coord=True`.
+    fix_second_angle : bool
+        For PPI only. If True, fixes erroneous second angle data. Defaults to False.
     kwargs :  kwargs
         Additional kwargs are fed to `xr.open_dataset`.
 
