@@ -108,3 +108,40 @@ def test_ipol_time():
     xr.testing.assert_allclose(
         time_out.drop_vars(time_out.coords), time_in.drop_vars(time_in.coords)
     )
+
+
+def test_ipol_time2():
+    # prepare Dataset with one NaT in between
+    ds = model.create_sweep_dataset()
+    ds = ds.swap_dims({"time": "azimuth"})
+    ds_in = xr.concat(
+        [
+            ds.isel(azimuth=slice(0, 179)),
+            ds.isel(azimuth=slice(180, 361)),
+        ],
+        "azimuth",
+        data_vars="minimal",
+    )
+
+    ds_out = util.remove_duplicate_rays(ds_in)
+    ds_out = util.reindex_angle(
+        ds_out,
+        0,
+        360,
+        1.0,
+        1,
+        method="nearest",
+    )
+
+    # roll the NaT through the array and test time interpolation
+    for i in range(len(ds_out.azimuth)):
+        # skip 180, 181 as it puts the NaT at the end/start, won't happen in normal life
+        if i in [180, 181]:
+            continue
+        dsx = ds_out.copy(deep=True)
+        dsx["time"].values = np.roll(dsx["time"].values, i)
+        dsy = dsx.pipe(util.ipol_time)
+        # specifically check the NaT location
+        assert dsy["time"][(179 + i) % 360].values == ds.time[179].values
+        # see if all data was preserved
+        np.testing.assert_array_equal(ds.time.values, np.roll(dsy.time.values, -i))

@@ -324,6 +324,16 @@ def extract_angle_parameters(ds):
     return angle_dict
 
 
+def _significant_digits(da, digits=16, dim=0):
+    for i in range(digits):
+        x = da.dropna(da.dims[dim]).astype(int).values % np.power(10, i)
+        if not x.any():
+            continue
+        else:
+            break
+    return i - 1
+
+
 def _ipol_time(da, start=0, stop=-1):
     """Interpolate/extrapolate missing time steps (NaT).
 
@@ -338,13 +348,22 @@ def _ipol_time(da, start=0, stop=-1):
         DataArray with interpolated/extrapolated timesteps.
     """
     dtype = da.dtype
-    da_sel = da[start:stop].dropna("azimuth")
+    da_sel = da.isel(azimuth=slice(start, stop))
+    # only interpolate, if NaT in data
+    if np.isnat(da_sel).any():
+        da_sel = da_sel.dropna("azimuth")
+    else:
+        return da
+    # get significant digits
+    sig = np.power(10, _significant_digits(da.dropna("azimuth").time))
     ipol = interpolate.interp1d(
         da_sel.azimuth,
         da_sel.astype(int),
         fill_value="extrapolate",
     )
-    da.data[start:stop] = ipol(da.azimuth[start:stop]).astype(dtype)
+    # apply significant digits, round properly
+    data = np.rint(ipol(da.azimuth[start:stop]) / sig).astype(int) * sig
+    da.data[start:stop] = data.astype(dtype)
     return da
 
 
@@ -362,17 +381,19 @@ def ipol_time(ds):
         Dataset with interpolated/extrapolated timesteps.
     """
     time = ds.time.astype(int)
-    amin = time.where(time > 0).argmin("azimuth", skipna=True).values
-    amax = time.where(time > 0).argmax("azimuth", skipna=True).values
+    amin = time.where(time > -9223372036854775808).argmin("azimuth", skipna=True).values
+    amax = time.where(time > -9223372036854775808).argmax("azimuth", skipna=True).values
     time = ds.time
+    length = len(ds.time)
     if amin > amax:
-        time = time.pipe(_ipol_time, 0, amin)
-        if amin != len(time) - 1:
+        if amax > 1:
+            time = time.pipe(_ipol_time, 0, amax)
+        if amin < length - 1:
             time = time.pipe(_ipol_time, amin, -1)
     else:
         time = time.pipe(_ipol_time)
-    ds["time"] = time
-    return ds
+    ds_out = ds.assign({"time": time})
+    return ds_out
 
 
 @contextlib.contextmanager
