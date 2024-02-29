@@ -226,8 +226,12 @@ class _GamicH5NetCDFMetadata(_H5NetCDFMetadata):
         start = np.array(start.replace(tzinfo=dt.timezone.utc)).astype("<M8[us]")
         return start
 
-    @property
-    def _sweep_number(self):
+    #def _get_ray_times(self):
+    #    if self._time is None:
+
+
+    #@property
+    def _get_sweep_number(self):
         """Return sweep number."""
         return int(self._group.split("/")[0][4:])
 
