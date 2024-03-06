@@ -15,6 +15,7 @@ from xradar.io.backends.nexrad_level2 import (
 
 def test_open_nexradlevel2_datatree(nexradlevel2_file):
     dtree = open_nexradlevel2_datatree(nexradlevel2_file)
+    print(dtree["/"])
     ds = dtree["sweep_0"]
     # assert ds.attrs["instrument_name"] == "KATX"
     # assert ds.attrs["nsweeps"] == 16
@@ -78,18 +79,18 @@ def test_open_nexrad_level2_file(nexradlevel2_file):
     print(nexradlevel2_file)
     fh = NEXRADLevel2File(nexradlevel2_file)
     print("--- Data Header ---")
-    print(len(fh._data_headers))
+    print(len(fh.data_header))
     # print(fh._data_headers[2000:3000])
 
     print("--- Meta Header ---")
-    print(len(fh._meta_headers))
-    print(sum([len(x) for x in fh._meta_headers]))
+    print(len(fh.meta_header))
+    print(sum([len(x) for x in fh.meta_header]))
 
     print(fh._msg_5_data)
 
     print("--- MSG 31 Header ---")
-    print("elevs", len(fh._msg_31_headers))
-    for i, el in enumerate(fh._msg_31_headers):
+    print("elevs", len(fh.msg_31_header))
+    for i, el in enumerate(fh.msg_31_header):
         print(f"Sweep {i}")
         print("nrays", len(el), el[-1]["record_number"] - el[0]["record_number"])
         print("start -->", el[0])
@@ -97,8 +98,8 @@ def test_open_nexrad_level2_file(nexradlevel2_file):
         print("stop  -->", el[-1])
 
     print("--- MSG 31 Data Header ---")
-    print("msg31 data", len(fh._msg_31_data_headers))
-    for i, dh in enumerate(fh._msg_31_data_headers):
+    print("msg31 data", len(fh.msg_31_data_header))
+    for i, dh in enumerate(fh.msg_31_data_header):
         print(i, dh)
     #
     # # print("--- Data Header ---")

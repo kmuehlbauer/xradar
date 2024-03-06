@@ -304,10 +304,10 @@ class NEXRADLevel2File(NEXRADRecordFile):
     def __init__(self, filename, **kwargs):
         super().__init__(filename, **kwargs)
 
+        self._data_header = None
         # get all metadata headers
         # message 15, 13, 18, 3, 5 and 2
-        self._meta_headers = {}
-        self.get_metadata_headers()
+        self._meta_header = None
 
         # message 15
         # RDA Clutter Map Data
@@ -320,17 +320,51 @@ class NEXRADLevel2File(NEXRADRecordFile):
         # message 5
         # RDA Volume Coverage Data
         self._msg_5_data = None
-        self.get_msg_5_data()
         # message 2
         # RDA Status Data
 
         # message 31 headers
         # Digital Radar Data Generic Format
-        self._data_headers = []
-        self._msg_31_headers = []
-        self._msg_31_data_headers = []
+        self._data_header = None
+        self._msg_31_header = None
+        self._msg_31_data_header = None
         self._data = OrderedDict()
-        self.get_data_headers()
+
+    @property
+    def data_header(self):
+        if self._data_header is None:
+            self._data_header, self._msg_31_header, self._msg_31_data_header = (
+                self.get_data_header()
+            )
+        return self._data_header
+
+    @property
+    def msg_31_header(self):
+        if self._msg_31_header is None:
+            self._data_header, self._msg_31_header, self._msg_31_data_header = (
+                self.get_data_header()
+            )
+        return self._msg_31_header
+
+    @property
+    def msg_31_data_header(self):
+        if self._msg_31_data_header is None:
+            self._data_header, self._msg_31_header, self._msg_31_data_header = (
+                self.get_data_header()
+            )
+        return self._msg_31_data_header
+
+    @property
+    def meta_header(self):
+        if self._meta_header is None:
+            self._meta_header = self.get_metadata_header()
+        return self._meta_header
+
+    @property
+    def msg_5(self):
+        if self._msg_5_data is None:
+            self._msg_5_data = self.get_msg_5_data()
+        return self._msg_5_data
 
     @property
     def data(self):
@@ -338,9 +372,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
 
     def get_sweep(self, sweep_number, moments=None):
         if moments is None:
-            moments = self._msg_31_data_headers[sweep_number][
-                "msg_31_data_headers"
-            ].keys()
+            moments = self.msg_31_data_header[sweep_number]["msg_31_data_header"].keys()
 
         # get selected coordinate type names
         selected = [k for k in DATA_BLOCK_CONSTANT_IDENTIFIERS.keys() if k in moments]
@@ -363,13 +395,13 @@ class NEXRADLevel2File(NEXRADRecordFile):
             return
 
         data = OrderedDict()
-        data[moment] = self._msg_31_data_headers[sweep_number][
-            "msg_31_data_headers"
-        ].pop(moment)
-        sweep.update(self._msg_31_data_headers[sweep_number])
+        data[moment] = self.msg_31_data_header[sweep_number]["msg_31_data_header"].pop(
+            moment
+        )
+        sweep.update(self.msg_31_data_header[sweep_number])
         sweep[mtype].update(data)
 
-    def get_metadata_headers(self):
+    def get_metadata_header(self):
         # data offsets
         # ICD 2620010E
         # 7.3.5 Metadata Record
@@ -381,6 +413,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
             msg_5=(132, 133),
             msg_2=(133, 134),
         )
+        meta_headers = {}
         for msg, (ms, me) in meta_offsets.items():
             mheader = []
             for rec in np.arange(ms, me):
@@ -393,7 +426,8 @@ class NEXRADLevel2File(NEXRADRecordFile):
                 message_header["record_number"] = self.record_number
                 message_header["filepos"] = filepos
                 mheader.append(message_header)
-            self._meta_headers[msg] = mheader
+            meta_headers[msg] = mheader
+        return meta_headers
 
     def get_msg_5_data(self):
         self.init_record(132)
@@ -415,7 +449,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
                 byte_order=">",
             )
             msg_5["elevation_data"].append(msg_5_elev)
-        self._msg_5_data = msg_5
+        return msg_5
 
     def get_message_header(self):
         """Read and unpack message header."""
@@ -458,13 +492,18 @@ class NEXRADLevel2File(NEXRADRecordFile):
                 data.append(self._rh.read(ngates, width=width).view(f"uint{word_size}"))
             moments[name].update(data=data)
 
-    def get_data_headers(self):
+    def get_data_header(self):
         """Load all data header from file."""
         self.init_record(133)
         current_sweep = -1
         sweep_msg_31_header = []
         sweep_intermediate_records = []
         sweep = OrderedDict()
+
+        data_header = []
+        _msg_31_header = []
+        _msg_31_data_header = []
+
         while self.init_next_record():
             # get message headers
             msg_header = self.get_message_header()
@@ -472,10 +511,11 @@ class NEXRADLevel2File(NEXRADRecordFile):
             msg_header["record_number"] = self.record_number
             msg_header["filepos"] = self.filepos
             # keep all data headers
-            self._data_headers.append(msg_header)
+            data_header.append(msg_header)
+
             # only check type 31 for now
             if msg_header["type"] == 31:
-                LEN_MSG_31 = struct.calcsize(_get_fmt_string(MSG_31, byte_order=">"))
+                # LEN_MSG_31 = struct.calcsize(_get_fmt_string(MSG_31, byte_order=">"))
                 # get msg_31_header
                 msg_31_header = _unpack_dictionary(
                     self._rh.read(LEN_MSG_31, width=1),
@@ -497,7 +537,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
                         self._data[current_sweep] = sweep
                         # create new sweep object
                         sweep = OrderedDict()
-                        self._msg_31_headers.append(sweep_msg_31_header)
+                        _msg_31_header.append(sweep_msg_31_header)
                         sweep_msg_31_header = []
                         sweep_intermediate_records = []
                     current_sweep += 1
@@ -538,8 +578,8 @@ class NEXRADLevel2File(NEXRADRecordFile):
                                 "data_offset"
                             ] = self.rh.pos
 
-                    sweep["msg_31_data_headers"] = block_header
-                    self._msg_31_data_headers.append(sweep)
+                    sweep["msg_31_data_header"] = block_header
+                    _msg_31_data_header.append(sweep)
                 sweep_msg_31_header.append(msg_31_header)
             else:
                 sweep_intermediate_records.append(msg_header)
@@ -548,7 +588,9 @@ class NEXRADLevel2File(NEXRADRecordFile):
         sweep["record_end"] = self.rh.recnum
         sweep["intermediate_records"] = sweep_intermediate_records
         self._data[current_sweep] = sweep
-        self._msg_31_headers.append(sweep_msg_31_header)
+        _msg_31_header.append(sweep_msg_31_header)
+
+        return data_header, _msg_31_header, _msg_31_data_header
 
     def _check_record(self):
         """Checks record for correct size.
@@ -1015,8 +1057,6 @@ LEN_VOLUME_DATA_BLOCK = struct.calcsize(
 # page 3-93
 ELEVATION_DATA_BLOCK = OrderedDict(
     [
-        # ("block_type", {"fmt": "1s"}),
-        # ("data_name", {"fmt": "3s"}),
         ("lrtup", UINT2),
         ("atmos", SINT2),
         ("refl_calib", FLT4),
@@ -1030,8 +1070,6 @@ LEN_ELEVATION_DATA_BLOCK = struct.calcsize(
 # pages 3-93
 RADIAL_DATA_BLOCK = OrderedDict(
     [
-        # ("block_type", {"fmt": "1s"}),
-        # ("data_name", {"fmt": "3s"}),
         ("lrtup", UINT2),
         ("unambig_range", SINT2),
         ("noise_h", FLT4),
@@ -1175,15 +1213,15 @@ class NexradLevel2Store(AbstractDataStore):
         return mname, Variable((dim, "range"), data, attrs, encoding)
 
     def open_store_coordinates(self):
-        msg_31_headers = self.root._msg_31_headers[self._group]
+        msg_31_header = self.root.msg_31_header[self._group]
 
         # azimuth/elevation
-        azimuth = np.array([ms["azimuth_angle"] for ms in msg_31_headers])
-        elevation = np.array([ms["elevation_angle"] for ms in msg_31_headers])
+        azimuth = np.array([ms["azimuth_angle"] for ms in msg_31_header])
+        elevation = np.array([ms["elevation_angle"] for ms in msg_31_header])
 
         # time
-        date = np.array([ms["collect_date"] for ms in msg_31_headers]) * 86400e3
-        milliseconds = np.array([ms["collect_ms"] for ms in msg_31_headers])
+        date = np.array([ms["collect_date"] for ms in msg_31_header]) * 86400e3
+        milliseconds = np.array([ms["collect_ms"] for ms in msg_31_header])
         rtime = date + milliseconds
         time_prefix = "milli"
         rtime_attrs = get_time_attrs(date_unit=f"{time_prefix}seconds")
@@ -1208,7 +1246,7 @@ class NexradLevel2Store(AbstractDataStore):
         prt_mode = "not_set"
         follow_mode = "not_set"
 
-        fixed_angle = self.root._msg_5_data["elevation_data"][self._group]
+        fixed_angle = self.root.msg_5["elevation_data"][self._group]
 
         coords = {
             "azimuth": Variable((dim,), azimuth, get_azimuth_attrs(), encoding),
@@ -1376,7 +1414,7 @@ def open_nexradlevel2_datatree(filename_or_obj, **kwargs):
             sweeps.extend(sweep)
     else:
         with NEXRADLevel2File(filename_or_obj, loaddata=False) as nex:
-            nsweeps = nex._msg_5_data["number_elevation_cuts"]
+            nsweeps = nex.msg_5["number_elevation_cuts"]
         sweeps = [f"sweep_{i}" for i in range(nsweeps)]
 
     engine = NexradLevel2BackendEntrypoint
