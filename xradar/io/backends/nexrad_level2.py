@@ -305,17 +305,30 @@ class NEXRADLevel2File(NEXRADRecordFile):
         super().__init__(filename, **kwargs)
 
         # get all metadata headers
+        # message 15, 13, 18, 3, 5 and 2
         self._meta_headers = {}
         self.get_metadata_headers()
 
-        # get msg_5 data
+        # message 15
+        # RDA Clutter Map Data
+        # message 13
+        # RDA Clutter Filter Bypass Map
+        # message 18
+        # RDA Adaptable Parameters
+        # message 3
+        # RDA Performance/Maintenance Data
+        # message 5
+        # RDA Volume Coverage Data
         self._msg_5_data = None
         self.get_msg_5_data()
+        # message 2
+        # RDA Status Data
 
-        # get msg_31 headers
+        # message 31 headers
+        # Digital Radar Data Generic Format
+        self._data_headers = []
         self._msg_31_headers = []
         self._msg_31_data_headers = []
-        self._data_headers = []
         self._data = OrderedDict()
         self.get_data_headers()
 
@@ -357,7 +370,9 @@ class NEXRADLevel2File(NEXRADRecordFile):
         sweep[mtype].update(data)
 
     def get_metadata_headers(self):
-
+        # data offsets
+        # ICD 2620010E
+        # 7.3.5 Metadata Record
         meta_offsets = dict(
             msg_15=(0, 77),
             msg_13=(77, 126),
@@ -370,15 +385,14 @@ class NEXRADLevel2File(NEXRADRecordFile):
             mheader = []
             for rec in np.arange(ms, me):
                 self.init_record(rec)
-                # self.rh.pos += 12
                 filepos = self.filepos
-                # get raw_prod_bhdr
-                raw_prod_bhdr = self.get_message_header()
-                if raw_prod_bhdr["size"] == 0:
+                message_header = self.get_message_header()
+                # do not read zero blocks of data
+                if message_header["size"] == 0:
                     break
-                raw_prod_bhdr["record_number"] = self.record_number
-                raw_prod_bhdr["filepos"] = filepos
-                mheader.append(raw_prod_bhdr)
+                message_header["record_number"] = self.record_number
+                message_header["filepos"] = filepos
+                mheader.append(message_header)
             self._meta_headers[msg] = mheader
 
     def get_msg_5_data(self):
@@ -445,8 +459,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
             moments[name].update(data=data)
 
     def get_data_headers(self):
-        """Load all data_header from file."""
-        # try to read claim all sweep headers
+        """Load all data header from file."""
         self.init_record(133)
         current_sweep = -1
         sweep_msg_31_header = []
