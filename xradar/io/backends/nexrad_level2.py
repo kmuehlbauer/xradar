@@ -109,6 +109,7 @@ class NEXRADFile:
         self._filepos = 0
         self._rawdata = False
         self._loaddata = loaddata
+        self._bz2_indices = None
         self.volume_header = self.get_header(VOLUME_HEADER)
         return
 
@@ -146,11 +147,23 @@ class NEXRADFile:
         return self._fh[start : self._filepos]
 
     def get_header(self, header):
-        from .iris import _get_fmt_string, _unpack_dictionary
-
         len = struct.calcsize(_get_fmt_string(header))
         head = _unpack_dictionary(self.read_from_file(len), header, self._rawdata)
         return head
+
+    @property
+    def bz2_record_indices(self):
+        if self._bz2_indices is None:
+            # magic number inside BZ2
+            seq = np.array([49, 65, 89, 38, 83, 89], dtype=np.uint8)
+            rd = util.rolling_dim(self._fh, 6)
+            self._bz2_indices = np.nonzero((rd == seq).all(1))[0] - 8
+        return self._bz2_indices
+
+    @property
+    def is_compressed(self):
+        size = self._fh[24:28].view(dtype=">u4")[0]
+        return size > 0
 
     def close(self):
         if self._fp is not None:
@@ -171,6 +184,8 @@ class NEXRADRecordFile(NEXRADFile):
     def __init__(self, filename, **kwargs):
         super().__init__(filename=filename, **kwargs)
         self._rh = None
+        self._rc = None
+        self._ldm = dict()
         self._record_number = None
 
     @property
@@ -212,9 +227,41 @@ class NEXRADRecordFile(NEXRADFile):
 
     def init_record(self, recnum):
         """Initialize record using given number."""
+        import bz2
+
+        def get_ldm(recnum):
+            if recnum < 134:
+                return 0
+            if recnum >= 134 and recnum < 254:
+                return 1
+            if recnum >= 254 and recnum < 374:
+                return 2
+            if recnum >= 374 and recnum < 494:
+                return 3
+            if recnum >= 494 and recnum < 614:
+                return 4
+            if recnum >= 614 and recnum < 734:
+                return 5
+
+        ldm = get_ldm(recnum)
         if recnum < 134:
+            if self.is_compressed:
+                if self._ldm.get(ldm, None) is None:
+                    start = self.bz2_record_indices[0]
+                    size = self._fh[start : start + 4].view(dtype=">u4")[0]
+                    print("SZ", size)
+                    self._fp.seek(start + 4)
+                    dec = bz2.BZ2Decompressor()
+                    self._ldm[ldm] = np.frombuffer(
+                        dec.decompress(self._fp.read(size)), dtype=np.uint8
+                    )
+                    # self._rc = np.frombuffer(bz2.decompress(self._fp.read(134 * RECORD_BYTES)), dtype=np.uint8)
+                    # self._rc = np.frombuffer(bz2.BZ2File(self._fp, mode="rb").read(134*RECORD_BYTES), dtype=np.uint8)
+                    print(len(self._ldm[ldm]))
+                start = recnum * RECORD_BYTES
             # 24 -  file header offset
-            start = recnum * RECORD_BYTES + 24
+            else:
+                start = recnum * RECORD_BYTES + 24
             stop = start + RECORD_BYTES
         else:
             start = self.record_size + self.filepos
@@ -228,7 +275,11 @@ class NEXRADRecordFile(NEXRADFile):
             stop = start + size
         self.record_number = recnum
         self.record_size = stop - start
-        self.rh = IrisRecord(self.fh[start:stop], recnum)
+        if self.is_compressed:
+            self.rh = IrisRecord(self._ldm[ldm][start:stop], recnum)
+            print(len(self.rh.record))
+        else:
+            self.rh = IrisRecord(self.fh[start:stop], recnum)
         self.filepos = start
         return self._check_record()
 
@@ -302,6 +353,8 @@ class NEXRADRecordFile(NEXRADFile):
 class NEXRADLevel2File(NEXRADRecordFile):
     def __init__(self, filename, **kwargs):
         super().__init__(filename, **kwargs)
+
+        # check compression
 
         self._data_header = None
         # get all metadata headers
@@ -423,13 +476,17 @@ class NEXRADLevel2File(NEXRADRecordFile):
             mheader = []
             for rec in np.arange(ms, me):
                 self.init_record(rec)
+                # print(self.rh.record[0:20])
+                # print(self.rh.pos)
                 filepos = self.filepos
                 message_header = self.get_message_header()
+                # print(rec, message_header)
                 # do not read zero blocks of data
                 if message_header["size"] == 0:
                     break
                 message_header["record_number"] = self.record_number
                 message_header["filepos"] = filepos
+                # print(message_header)
                 mheader.append(message_header)
             meta_headers[msg] = mheader
         return meta_headers
@@ -606,6 +663,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
             False, if record is truncated.
         """
         chk = self._rh.record.shape[0] == self.record_size
+        print(self.record_number, self._rh.record.shape, self.record_size)
         if not chk:
             raise EOFError(f"Unexpected file end detected at record {self.rh.recnum}")
         return chk
