@@ -125,7 +125,8 @@ def test_open_nexrad_level2_backend(nexradlevel2_file):
 
 
 def test_open_nexrad_level2_file_ds(nexradlevel2_file):
-    ds = xr.open_dataset(nexradlevel2_file, engine="nexradlevel2", group="sweep_15")
+    fname_gz = "/home/kai/projects/data/radar_all_over_the_world/nexrad/KLBB20160601_150025_V06"
+    ds = xr.open_dataset(fname_gz, engine="nexradlevel2", group="sweep_0")
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(12, 12))
@@ -334,19 +335,24 @@ def test_open_nexrad_level2_file_decompress_b(benchmark):
 
 
 def test_open_nexrad_level2_file_compressed():
-    fname_bz = "/home/kai/data/daten/daten/radar_all_over_the_world/NEXRAD/KATX20160601_090111_V06_bz2"
+    fname_bz = "/home/kai/projects/data/radar_all_over_the_world/nexrad/KATX20160601_090111_V06_bz"
     fh = NEXRADLevel2File(fname_bz)
-    print("tell", fh._fp.tell())
     for k, v in fh.meta_header.items():
-        print(k, v)
+        print(k)
+        print(v)
 
     print("MSG_5", fh.msg_5)
-
+    #fh.init_record(134)
     print(len(fh.data_header))
+    for head in fh.msg_31_header:
+        print(head)
+    print(fh.msg_31_data_header)
 
 
 def test_open_nexrad_level2_file_uncompressed():
-    fname_gz = "/home/kai/data/daten/daten/radar_all_over_the_world/NEXRAD/KATX20160601_090111_V06_gz"
+    fname_gz = "/home/kai/projects/data/radar_all_over_the_world/nexrad/KATX20160601_090111_V06_gz"
+    fname_gz = "/home/kai/projects/data/radar_all_over_the_world/nexrad/KLBB20160601_150025_V06"
+    ds = xr.open_dataset(fname_gz, engine="nexradlevel2", group="sweep_0")
     fh = NEXRADLevel2File(fname_gz)
     for k, v in fh.meta_header.items():
         print(k, v)

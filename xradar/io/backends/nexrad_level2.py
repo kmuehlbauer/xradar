@@ -232,52 +232,66 @@ class NEXRADRecordFile(NEXRADFile):
         def get_ldm(recnum):
             if recnum < 134:
                 return 0
-            if recnum >= 134 and recnum < 254:
-                return 1
-            if recnum >= 254 and recnum < 374:
-                return 2
-            if recnum >= 374 and recnum < 494:
-                return 3
-            if recnum >= 494 and recnum < 614:
-                return 4
-            if recnum >= 614 and recnum < 734:
-                return 5
+            mod = (recnum - 133) // 120
+            return mod
 
         ldm = get_ldm(recnum)
+        if self.is_compressed:
+            if self._ldm.get(ldm, None) is None:
+                start = self.bz2_record_indices[ldm]
+                size = self._fh[start: start + 4].view(dtype=">u4")[0]
+                #print("SZ", size)
+                self._fp.seek(start + 4)
+                dec = bz2.BZ2Decompressor()
+                self._ldm[ldm] = np.frombuffer(
+                    dec.decompress(self._fp.read(size)), dtype=np.uint8
+                )
+                # self._rc = np.frombuffer(bz2.decompress(self._fp.read(134 * RECORD_BYTES)), dtype=np.uint8)
+                # self._rc = np.frombuffer(bz2.BZ2File(self._fp, mode="rb").read(134*RECORD_BYTES), dtype=np.uint8)
+        #print("LDM:", ldm, len(self._ldm[ldm]))
+
         if recnum < 134:
             if self.is_compressed:
-                if self._ldm.get(ldm, None) is None:
-                    start = self.bz2_record_indices[0]
-                    size = self._fh[start : start + 4].view(dtype=">u4")[0]
-                    print("SZ", size)
-                    self._fp.seek(start + 4)
-                    dec = bz2.BZ2Decompressor()
-                    self._ldm[ldm] = np.frombuffer(
-                        dec.decompress(self._fp.read(size)), dtype=np.uint8
-                    )
-                    # self._rc = np.frombuffer(bz2.decompress(self._fp.read(134 * RECORD_BYTES)), dtype=np.uint8)
-                    # self._rc = np.frombuffer(bz2.BZ2File(self._fp, mode="rb").read(134*RECORD_BYTES), dtype=np.uint8)
-                    print(len(self._ldm[ldm]))
+
                 start = recnum * RECORD_BYTES
             # 24 -  file header offset
             else:
                 start = recnum * RECORD_BYTES + 24
             stop = start + RECORD_BYTES
         else:
-            start = self.record_size + self.filepos
-            buf = self.fh[start + 12 : start + 12 + LEN_MSG_HEADER]
-            if len(buf) < 16:
-                return False
-            header = _unpack_dictionary(buf, MSG_HEADER, self._rawdata, byte_order=">")
-            size = header["size"] * 2 + 12
-            if header["type"] != 31:
-                size = size if size >= RECORD_BYTES else RECORD_BYTES
-            stop = start + size
+            if self.is_compressed:
+                rnum = (recnum - 134) % 120
+                #print("RNUM:", recnum, rnum)
+                if rnum == 0:
+                    start = 0
+                else:
+                    start = self.record_size + self.filepos
+                buf = self._ldm[ldm][start + 12: start + 12 + LEN_MSG_HEADER]
+
+                #buf = self.fh[start + 12 : start + 12 + LEN_MSG_HEADER]
+                if len(buf) < 16:
+                    return False
+                header = _unpack_dictionary(buf, MSG_HEADER, self._rawdata, byte_order=">")
+                size = header["size"] * 2 + 12
+                if header["type"] != 31:
+                    size = size if size >= RECORD_BYTES else RECORD_BYTES
+                stop = start + size
+            else:
+                #print("RECORD NUMBER:", recnum)
+                start = self.record_size + self.filepos
+                buf = self.fh[start + 12 : start + 12 + LEN_MSG_HEADER]
+                if len(buf) < 16:
+                    return False
+                header = _unpack_dictionary(buf, MSG_HEADER, self._rawdata, byte_order=">")
+                size = header["size"] * 2 + 12
+                if header["type"] != 31:
+                    size = size if size >= RECORD_BYTES else RECORD_BYTES
+                stop = start + size
         self.record_number = recnum
         self.record_size = stop - start
         if self.is_compressed:
             self.rh = IrisRecord(self._ldm[ldm][start:stop], recnum)
-            print(len(self.rh.record))
+            #print("test", len(self.rh.record))
         else:
             self.rh = IrisRecord(self.fh[start:stop], recnum)
         self.filepos = start
@@ -558,6 +572,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
         """Load all data header from file."""
         self.init_record(133)
         current_sweep = -1
+        current_header = 0
         sweep_msg_31_header = []
         sweep_intermediate_records = []
         sweep = OrderedDict()
@@ -567,6 +582,8 @@ class NEXRADLevel2File(NEXRADRecordFile):
         _msg_31_data_header = []
 
         while self.init_next_record():
+            current_header += 1
+            # print("current_header:", current_header )
             # get message headers
             msg_header = self.get_message_header()
             # append to data headers list
@@ -574,7 +591,8 @@ class NEXRADLevel2File(NEXRADRecordFile):
             msg_header["filepos"] = self.filepos
             # keep all data headers
             data_header.append(msg_header)
-
+            #if current_header == 10:
+            #    raise
             # only check type 31 for now
             if msg_header["type"] == 31:
                 # LEN_MSG_31 = struct.calcsize(_get_fmt_string(MSG_31, byte_order=">"))
@@ -663,7 +681,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
             False, if record is truncated.
         """
         chk = self._rh.record.shape[0] == self.record_size
-        print(self.record_number, self._rh.record.shape, self.record_size)
+        #print(self.record_number, self._rh.record.shape, self.record_size)
         if not chk:
             raise EOFError(f"Unexpected file end detected at record {self.rh.recnum}")
         return chk
