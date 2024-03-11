@@ -158,6 +158,7 @@ class NEXRADFile:
             seq = np.array([49, 65, 89, 38, 83, 89], dtype=np.uint8)
             rd = util.rolling_dim(self._fh, 6)
             self._bz2_indices = np.nonzero((rd == seq).all(1))[0] - 8
+            #print(self._bz2_indices)
         return self._bz2_indices
 
     @property
@@ -232,13 +233,16 @@ class NEXRADRecordFile(NEXRADFile):
         def get_ldm(recnum):
             if recnum < 134:
                 return 0
-            mod = (recnum - 133) // 120
+            mod = ((recnum - 134) // 120) + 1
             return mod
 
         ldm = get_ldm(recnum)
         if self.is_compressed:
             if self._ldm.get(ldm, None) is None:
+                if ldm >= len(self.bz2_record_indices):
+                    return False
                 start = self.bz2_record_indices[ldm]
+                #print("LDM:", recnum, ldm, start)
                 size = self._fh[start: start + 4].view(dtype=">u4")[0]
                 #print("SZ", size)
                 self._fp.seek(start + 4)
@@ -572,7 +576,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
         """Load all data header from file."""
         self.init_record(133)
         current_sweep = -1
-        current_header = 0
+        current_header = -1
         sweep_msg_31_header = []
         sweep_intermediate_records = []
         sweep = OrderedDict()
@@ -583,12 +587,14 @@ class NEXRADLevel2File(NEXRADRecordFile):
 
         while self.init_next_record():
             current_header += 1
-            # print("current_header:", current_header )
+            #print("current sweep/header:", self.record_number, current_sweep, current_header )
             # get message headers
             msg_header = self.get_message_header()
             # append to data headers list
             msg_header["record_number"] = self.record_number
             msg_header["filepos"] = self.filepos
+
+            #print("MSG_HEADER:", current_sweep, current_header, msg_header)
             # keep all data headers
             data_header.append(msg_header)
             #if current_header == 10:
@@ -606,7 +612,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
                 # add record_number/filepos
                 msg_31_header["record_number"] = self.record_number
                 msg_31_header["filepos"] = self.filepos
-
+                #print("MSG31_HEADER:", current_sweep, current_header, msg_31_header)
                 # retrieve data/const headers from msg 31
                 # check if this is a new sweep
                 if msg_31_header["radial_status"] in [0, 3]:
@@ -669,7 +675,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
         sweep["intermediate_records"] = sweep_intermediate_records
         self._data[current_sweep] = sweep
         _msg_31_header.append(sweep_msg_31_header)
-
+        #print("AA", self.record_number, self.rh.recnum)
         return data_header, _msg_31_header, _msg_31_data_header
 
     def _check_record(self):
@@ -681,7 +687,7 @@ class NEXRADLevel2File(NEXRADRecordFile):
             False, if record is truncated.
         """
         chk = self._rh.record.shape[0] == self.record_size
-        #print(self.record_number, self._rh.record.shape, self.record_size)
+        #print(chk, self.record_number, self._rh.record.shape, self.record_size)
         if not chk:
             raise EOFError(f"Unexpected file end detected at record {self.rh.recnum}")
         return chk
