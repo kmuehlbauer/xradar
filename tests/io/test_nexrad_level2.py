@@ -17,7 +17,7 @@ from xradar.io.backends.nexrad_level2 import (
 
 
 @pytest.mark.parametrize(
-    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"], indirect=True
+    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"]
 )
 def test_open_nexradlevel2_datatree(nexradlevel2_files):
     dtree = open_nexradlevel2_datatree(nexradlevel2_files)
@@ -29,7 +29,7 @@ def test_open_nexradlevel2_datatree(nexradlevel2_files):
 
 
 @pytest.mark.parametrize(
-    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"], indirect=True
+    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"]
 )
 def test_open_nexrad_level2_backend(nexradlevel2_files):
     with NEXRADLevel2File(nexradlevel2_files, loaddata=False) as nex:
@@ -45,7 +45,7 @@ def test_open_nexrad_level2_backend(nexradlevel2_files):
 
 
 @pytest.mark.parametrize(
-    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"], indirect=True
+    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"]
 )
 def test_open_nexradlevel2_file(nexradlevel2_files):
     fh = NEXRADLevel2File(nexradlevel2_files)
