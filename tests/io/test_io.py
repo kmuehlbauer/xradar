@@ -816,8 +816,7 @@ def test_cfradfial2_roundtrip(cfradial1_file, first_dim):
 
 @pytest.mark.parametrize("sweep", ["sweep_0", 0, [0, 1], ["sweep_0", "sweep_1"]])
 @pytest.mark.parametrize(
-    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"], indirect=True
-)
+    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"]
 def test_open_nexradlevel2_datatree_sweep(nexradlevel2_files, sweep):
     dtree = open_nexradlevel2_datatree(nexradlevel2_files, sweep=sweep)
     if isinstance(sweep, (str, int)):
@@ -828,7 +827,7 @@ def test_open_nexradlevel2_datatree_sweep(nexradlevel2_files, sweep):
 
 
 @pytest.mark.parametrize(
-    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"], indirect=True
+    "nexradlevel2_files", ["nexradlevel2_gzfile", "nexradlevel2_bzfile"]
 )
 def test_open_nexradlevel2_datatree(nexradlevel2_files):
     dtree = open_nexradlevel2_datatree(nexradlevel2_files)
