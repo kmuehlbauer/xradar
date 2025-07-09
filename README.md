@@ -20,10 +20,10 @@ GitHub also offers a “Cite this repository” button near the top right of thi
 
 In the [rendered documentation](https://docs.openradarscience.org/projects/xradar/en/stable/#how-to-cite-xradar), you will find the full APA citation displayed below.
 
-```{only} html
-Cite this project (APA style):
+.. only:: html
+   Cite this project (APA style):
 
-{{ apa_citation }}
+   {{ apa_citation }}
 ```
 
 ## About
