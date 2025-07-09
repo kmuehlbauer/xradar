@@ -150,9 +150,27 @@ autoclass_content = "both"
 version = version("xradar")
 release = version
 
+
+def generate_apa_citation():
+    cff_path = "../CITATION.cff"
+    try:
+        result = subprocess.run(
+            ["cffconvert", "--format", "apalike", "-i", cff_path],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return f"{result.stdout.strip()}"
+    except Exception as e:
+        return f"Error generating citation: {e}"
+
+
+apa_citation = generate_apa_citation()
+
 myst_substitutions = {
     "today": dt.datetime.now(dt.UTC).strftime("%Y-%m-%d"),
     "release": release,
+    "apa_citation": apa_citation,
 }
 myst_heading_anchors = 3
 

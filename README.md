@@ -16,15 +16,14 @@ Xradar includes all the tools to get your weather radar into the xarray data mod
 
 This project provides a Zenodo badge with a DOI for easy citation — click the badge above to get the official citation and permanent archive.
 
-GitHub also offers a “Cite this repository” button near the top right of this page, where you can quickly copy the citation in various formats like APA and BibTeX.
+GitHub also offers a “Cite this repository” button near the top right of [this page](https://github.com/openradar/xradar), where you can quickly copy the citation in various formats like APA and BibTeX.
 
-In the [rendered documentation](https://docs.openradarscience.org/projects/xradar/en/stable/#how-to-cite-xradar), you will find the full APA citation displayed below.
+In the [rendered documentation](https://docs.openradarscience.org/projects/xradar/en/stable/#how-to-cite-xradar), you will find the full citation below.
 
-.. only:: html
-   Cite this project (APA style):
-
-   {{ apa_citation }}
-```
+> [!TIP]
+> **Cite Xradar as**
+>
+> *{{ apa_citation }}*
 
 ## About
 
